@@ -107,37 +107,37 @@ bool ChessBoard::isPseudoValidMove(int fromRow, int fromColumn, int toRow, int t
     return true;
 }
 
-bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
-{
-    // bounds + source presence
-    if (!in_bounds(fromRow, fromColumn, numRows, numCols) ||
-        !in_bounds(toRow, toColumn, numRows, numCols))
-        return false;
+// bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
+// {
+//     // bounds + source presence
+//     if (!in_bounds(fromRow, fromColumn, numRows, numCols) ||
+//         !in_bounds(toRow, toColumn, numRows, numCols))
+//         return false;
 
-    ChessPiece* piece = board.at(fromRow).at(fromColumn);
-    if (!piece) return false;
+//     ChessPiece* piece = board.at(fromRow).at(fromColumn);
+//     if (!piece) return false;
 
-    // must be the correct turn
-    if (piece->getColor() != turn) return false;
+//     // must be the correct turn
+//     if (piece->getColor() != turn) return false;
 
-    // must be a valid move (shape + path + same-color dest check)
-    if (!isValidMove(fromRow, fromColumn, toRow, toColumn)) return false;
+//     // must be a valid move (shape + path + same-color dest check)
+//     if (!isValidMove(fromRow, fromColumn, toRow, toColumn)) return false;
 
-    // capture if needed
-    if (ChessPiece* victim = board.at(toRow).at(toColumn)) {
-        delete victim;
-        board.at(toRow).at(toColumn) = nullptr;
-    }
+//     // capture if needed
+//     if (ChessPiece* victim = board.at(toRow).at(toColumn)) {
+//         delete victim;
+//         board.at(toRow).at(toColumn) = nullptr;
+//     }
 
-    // execute move
-    board.at(toRow).at(toColumn) = piece;
-    board.at(fromRow).at(fromColumn) = nullptr;
-    piece->setPosition(toRow, toColumn);
+//     // execute move
+//     board.at(toRow).at(toColumn) = piece;
+//     board.at(fromRow).at(fromColumn) = nullptr;
+//     piece->setPosition(toRow, toColumn);
 
-    // flip turn
-    turn = (turn == White ? Black : White);
-    return true;
-}
+//     // flip turn
+//     turn = (turn == White ? Black : White);
+//     return true;
+// }
 
 bool ChessBoard::isPieceUnderThreat(int row, int column)
 {

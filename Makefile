@@ -1,12 +1,38 @@
-CC=g++
-C_FLAGS=-g -std=c++17 -Wall
+# Compiler and Flags
+CXX      = g++
+CXXFLAGS = -g -Wall -std=c++17 -pthread
 
-SRC_FILES=$(filter-out $(wildcard main.cc),$(wildcard *.cc))
-APP=chess
+# Common Source Files
+# Note: PawnPromote.cc is included here because it defines movePiece.
+# You MUST remove movePiece from ChessBoard.cc for this to work.
+COMMON_SRCS = BishopPiece.cc \
+              ChessBoard.cc \
+              ChessPiece.cc \
+              KingPiece.cc \
+              KnightPiece.cc \
+              PawnPiece.cc \
+              PawnPromote.cc \
+              QueenPiece.cc \
+              RookPiece.cc
 
-custom_tests:
-	$(CC) $(C_FLAGS) $(SRC_FILES) main.cc -o $(APP)
+# Object files
+COMMON_OBJS = $(COMMON_SRCS:.cc=.o)
 
-valgrind:
-	valgrind --leak-check=full ./$(APP) $(TEST)
+# Targets
+all: part1 part2 part3
 
+part1: $(COMMON_OBJS) main_part1.o
+	$(CXX) $(CXXFLAGS) -o chess_part1 $(COMMON_OBJS) main_part1.o
+
+part2: $(COMMON_OBJS) main_part2.o
+	$(CXX) $(CXXFLAGS) -o chess_part2 $(COMMON_OBJS) main_part2.o
+
+part3: $(COMMON_OBJS) main_part3.o
+	$(CXX) $(CXXFLAGS) -o chess_part3 $(COMMON_OBJS) main_part3.o
+
+# Generic rule for compiling .cc to .o
+%.o: %.cc
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+clean:
+	rm -f *.o chess_part1 chess_part2 chess_part3

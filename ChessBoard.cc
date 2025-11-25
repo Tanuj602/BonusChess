@@ -3,6 +3,7 @@
 #include "RookPiece.hh"
 #include "BishopPiece.hh"
 #include "KingPiece.hh"
+#include <sstream>
 
 using Student::ChessBoard;
 using Student::ChessPiece;
@@ -10,8 +11,6 @@ using Student::PawnPiece;
 using Student::RookPiece;
 using Student::BishopPiece;
 using Student::KingPiece;
-
-#include <sstream>
 
 ChessBoard::ChessBoard(int numRow, int numCol)
 {
@@ -24,8 +23,10 @@ ChessBoard::ChessBoard(int numRow, int numCol)
 ChessBoard::~ChessBoard() {
     for (auto& rowVec : board) {
         for (ChessPiece*& p : rowVec) {
-            delete p;
-            p = nullptr;
+            if (p != nullptr) {
+                delete p;
+                p = nullptr;
+            }
         }
     }
 }
@@ -39,17 +40,18 @@ void ChessBoard::createChessPiece(Color col, Type ty, int startRow, int startCol
     }
 
     ChessPiece* p = nullptr;
-    if (ty == Pawn)   p = new PawnPiece(*this, col, startRow, startColumn);
+    if (ty == Pawn)        p = new PawnPiece(*this, col, startRow, startColumn);
     else if (ty == Rook)   p = new RookPiece(*this, col, startRow, startColumn);
     else if (ty == Bishop) p = new BishopPiece(*this, col, startRow, startColumn);
     else if (ty == King)   p = new KingPiece(*this, col, startRow, startColumn);
+    
     board.at(startRow).at(startColumn) = p;
 }
 
+// Helper for bounds checking
 static bool in_bounds(int r, int c, int R, int C) {
     return r >= 0 && r < R && c >= 0 && c < C;
 }
-
 
 bool ChessBoard::isValidMove(int fromRow, int fromColumn, int toRow, int toColumn)
 {
@@ -100,94 +102,75 @@ bool ChessBoard::isPseudoValidMove(int fromRow, int fromColumn, int toRow, int t
             if (board.at(r).at(c) != nullptr) return false;
             r += dr; c += dc;
         }
-    } else if (ty == Pawn) {
-        // Pawn path handled inside PawnPiece::canMoveToLocation (including 2-step mid cell)
-    }
+    } 
+    // Pawn path handled inside PawnPiece::canMoveToLocation
 
     return true;
 }
 
-// ------------------------------------------------------------------
-// STEP 2: Paste this movePiece function to replace your old one
-// ------------------------------------------------------------------
-bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn) {
+bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
+{
     // ---------------------------------------------------
     // 1. INITIAL CHECKS
     // ---------------------------------------------------
 
-    // Check 1: Bounds check
-    if (fromRow < 0 || fromRow >= numRows || fromColumn < 0 || fromColumn >= numCols ||
-        toRow < 0 || toRow >= numRows || toColumn < 0 || toColumn >= numCols) {
+    // Check bounds
+    if (!in_bounds(fromRow, fromColumn, numRows, numCols) ||
+        !in_bounds(toRow, toColumn, numRows, numCols)) {
         return false;
     }
 
-    // Check 2: Existence and Turn
-    ChessPiece* pieceToMove = getPiece(fromRow, fromColumn);
-    if (pieceToMove == nullptr) {
-        return false;
-    }
+    ChessPiece* piece = board.at(fromRow).at(fromColumn);
     
-    // Ensure the piece belongs to the player whose turn it currently is
-    if (pieceToMove->getColor() != turn) {
-        return false;
-    }
+    // Check existence
+    if (!piece) return false;
 
-    // Check 3: Validity according to Chess Rules
-    // (This calls your existing isValidMove logic)
-    if (!isValidMove(fromRow, fromColumn, toRow, toColumn)) {
-        return false;
-    }
+    // Check turn
+    if (piece->getColor() != turn) return false;
+
+    // Check validity
+    if (!isValidMove(fromRow, fromColumn, toRow, toColumn)) return false;
 
     // ---------------------------------------------------
     // 2. EXECUTE MOVE & CAPTURE
     // ---------------------------------------------------
 
-    // If there is an opponent piece at the destination, capture (delete) it.
-    if (board[toRow][toColumn] != nullptr) {
-        delete board[toRow][toColumn];
-        board[toRow][toColumn] = nullptr;
+    // Capture if needed
+    if (ChessPiece* victim = board.at(toRow).at(toColumn)) {
+        delete victim;
+        board.at(toRow).at(toColumn) = nullptr;
     }
 
-    // Move the pointer: Place piece in new slot
-    board[toRow][toColumn] = board[fromRow][fromColumn];
-    
-    // Clear the old slot
-    board[fromRow][fromColumn] = nullptr;
-
-    // Update the piece's internal position
-    board[toRow][toColumn]->setPosition(toRow, toColumn);
+    // Move the piece
+    board.at(toRow).at(toColumn) = piece;
+    board.at(fromRow).at(fromColumn) = nullptr;
+    piece->setPosition(toRow, toColumn);
 
     // ---------------------------------------------------
-    // 3. PAWN PROMOTION LOGIC
+    // 3. PAWN PROMOTION
     // ---------------------------------------------------
     
-    // Get the piece at the new location
-    ChessPiece* movedPiece = board[toRow][toColumn];
-
-    // Check if the moved piece is a Pawn using dynamic_cast.
-    PawnPiece* pawn = dynamic_cast<PawnPiece*>(movedPiece);
+    // Check if the moved piece is a Pawn
+    PawnPiece* pawn = dynamic_cast<PawnPiece*>(piece);
 
     if (pawn != nullptr) {
         bool promote = false;
-
-        // Condition A: White Pawn reaches the top (Row 0)
-        if (movedPiece->getColor() == White && toRow == 0) {
+        // White Pawn reaches top (Row 0)
+        if (piece->getColor() == White && toRow == 0) {
             promote = true;
         }
-        // Condition B: Black Pawn reaches the bottom (Row numRows - 1)
-        else if (movedPiece->getColor() == Black && toRow == numRows - 1) {
+        // Black Pawn reaches bottom (Row numRows - 1)
+        else if (piece->getColor() == Black && toRow == numRows - 1) {
             promote = true;
         }
 
-        // If promotion condition is met, swap Pawn for Queen
         if (promote) {
-            Color c = movedPiece->getColor();
-            
-            // Delete the pawn object
-            delete board[toRow][toColumn];
-            board[toRow][toColumn] = nullptr; 
+            Color c = piece->getColor();
+            // Delete the pawn from the board
+            delete board.at(toRow).at(toColumn);
+            board.at(toRow).at(toColumn) = nullptr;
 
-            // Create the new Queen at that spot
+            // Create a Queen in its place
             createChessPiece(c, Queen, toRow, toColumn);
         }
     }
@@ -195,14 +178,7 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
     // ---------------------------------------------------
     // 4. FINALIZE TURN
     // ---------------------------------------------------
-
-    // Switch turn to the other player
-    if (turn == White) {
-        turn = Black;
-    } else {
-        turn = White;
-    }
-
+    turn = (turn == White ? Black : White);
     return true;
 }
 
@@ -211,7 +187,7 @@ bool ChessBoard::isPieceUnderThreat(int row, int column)
     if (!in_bounds(row, column, numRows, numCols)) return false;
 
     ChessPiece* target = board.at(row).at(column);
-    if (!target) return false; // empty square isn't "under threat" in Part 2’s definition
+    if (!target) return false; 
 
     Color defender = target->getColor();
     Color attackerColor = (defender == White ? Black : White);

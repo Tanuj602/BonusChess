@@ -107,6 +107,9 @@ bool ChessBoard::isPseudoValidMove(int fromRow, int fromColumn, int toRow, int t
     return true;
 }
 
+// ------------------------------------------------------------------
+// STEP 2: Paste this movePiece function to replace your old one
+// ------------------------------------------------------------------
 bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn) {
     // ---------------------------------------------------
     // 1. INITIAL CHECKS
@@ -130,6 +133,7 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
     }
 
     // Check 3: Validity according to Chess Rules
+    // (This calls your existing isValidMove logic)
     if (!isValidMove(fromRow, fromColumn, toRow, toColumn)) {
         return false;
     }
@@ -154,7 +158,7 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
     board[toRow][toColumn]->setPosition(toRow, toColumn);
 
     // ---------------------------------------------------
-    // 3. PAWN PROMOTION
+    // 3. PAWN PROMOTION LOGIC
     // ---------------------------------------------------
     
     // Get the piece at the new location
@@ -177,13 +181,11 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
 
         // If promotion condition is met, swap Pawn for Queen
         if (promote) {
-            // Remove the pawn from the board (but don't delete the pointer yet, createChessPiece might need the slot clear or overwrite it)
-            // Actually, safer to rely on createChessPiece or manual swap:
             Color c = movedPiece->getColor();
             
             // Delete the pawn object
             delete board[toRow][toColumn];
-            board[toRow][toColumn] = nullptr; // Safety
+            board[toRow][toColumn] = nullptr; 
 
             // Create the new Queen at that spot
             createChessPiece(c, Queen, toRow, toColumn);

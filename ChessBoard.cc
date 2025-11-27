@@ -65,11 +65,65 @@ static bool in_bounds(int r, int c, int R, int C) {
 
 bool ChessBoard::isValidMove(int fromRow, int fromColumn, int toRow, int toColumn)
 {
-    // first, normal chess rules (no turns, no king safety)
-    if (!isPseudoValidMove(fromRow, fromColumn, toRow, toColumn)) return false;
+    // Bounds check
+    if (!in_bounds(fromRow, fromColumn, numRows, numCols) ||
+        !in_bounds(toRow, toColumn, numRows, numCols)) return false;
 
-    // then, Part 3: the move must not leave our own king in check
+    ChessPiece* piece = board.at(fromRow).at(fromColumn);
+    if (!piece) return false;
+
+    // --- CASTLING CHECK ---
+    // If it is a King moving 2 spaces horizontally...
+    if (piece->getType() == King && 
+        fromRow == toRow && 
+        std::abs(toColumn - fromColumn) == 2) {
+        return isValidCastling(fromRow, fromColumn, toRow, toColumn);
+    }
+    // ----------------------
+
+    // Standard logic for all other moves
+    if (!isPseudoValidMove(fromRow, fromColumn, toRow, toColumn)) return false;
     if (wouldLeaveKingInCheck(fromRow, fromColumn, toRow, toColumn)) return false;
+
+    return true;
+}
+
+// In ChessBoard.cc
+
+bool ChessBoard::isValidCastling(int fromRow, int fromColumn, int toRow, int toColumn)
+{
+    ChessPiece* king = board.at(fromRow).at(fromColumn);
+    
+    // 1. King must not have moved
+    if (king->getHasMoved()) return false;
+
+    // 2. King must not be in check currently
+    if (isSquareUnderAttack(fromRow, fromColumn, (king->getColor() == White ? Black : White))) return false;
+
+    // Identify Rook position based on direction
+    int rookCol = (toColumn > fromColumn) ? 7 : 0; // Column 7 for KingSide, 0 for QueenSide
+    ChessPiece* rook = board.at(fromRow).at(rookCol);
+
+    // 3. Rook must exist, be a Rook, same color, and not have moved
+    if (rook == nullptr || rook->getType() != Rook || 
+        rook->getColor() != king->getColor() || rook->getHasMoved()) {
+        return false;
+    }
+
+    // 4. Path must be unobstructed
+    // We check the squares between King and Rook
+    int direction = (toColumn > fromColumn) ? 1 : -1;
+    for (int c = fromColumn + direction; c != rookCol; c += direction) {
+        if (board.at(fromRow).at(c) != nullptr) return false;
+    }
+
+    // 5. The square the King skips over (and the destination) must not be under threat
+    // The King moves 2 squares. We check the 'middle' square and the 'destination' square.
+    int middleCol = fromColumn + direction;
+    Color enemyColor = (king->getColor() == White ? Black : White);
+
+    if (isSquareUnderAttack(fromRow, middleCol, enemyColor)) return false;
+    if (isSquareUnderAttack(toRow, toColumn, enemyColor)) return false;
 
     return true;
 }
@@ -120,62 +174,102 @@ bool ChessBoard::isPseudoValidMove(int fromRow, int fromColumn, int toRow, int t
 
 bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
 {
+    // ---------------------------------------------------
+    // 1. VALIDATION
+    // ---------------------------------------------------
     if (!isValidMove(fromRow, fromColumn, toRow, toColumn)) return false;
-    if (board.at(fromRow).at(fromColumn)->getColor() != turn) return false;
-
+    
     ChessPiece* piece = board.at(fromRow).at(fromColumn);
     
-    // --- EN PASSANT CAPTURE LOGIC ---
-    // If a Pawn moves diagonally into an empty square, it MUST be En Passant
-    // (PawnPiece::canMoveToLocation only allows this if it matches enPassantTarget)
-    if (piece->getType() == Pawn && board.at(toRow).at(toColumn) == nullptr && fromColumn != toColumn) {
-        // The victim pawn is located at [fromRow][toColumn]
-        // (Directly "behind" where the capturing pawn lands, relative to the capture direction)
+    // Check if piece exists and is the correct turn
+    if (!piece || piece->getColor() != turn) return false;
+
+    // ---------------------------------------------------
+    // 2. SPECIAL MOVE EXECUTION (Castling & En Passant)
+    // ---------------------------------------------------
+
+    // -- CASTLING --
+    // If King moves 2 squares horizontally, we must also move the Rook.
+    if (piece->getType() == King && std::abs(toColumn - fromColumn) == 2) {
+        int rookCol = (toColumn > fromColumn) ? 7 : 0;      // Rook is at col 0 or 7
+        int rookDestCol = (toColumn > fromColumn) ? 5 : 3;  // Rook lands at col 3 or 5
+        
+        ChessPiece* rook = board.at(fromRow).at(rookCol);
+        
+        // Move the Rook
+        if (rook) {
+            board.at(fromRow).at(rookDestCol) = rook;
+            board.at(fromRow).at(rookCol) = nullptr;
+            rook->setPosition(fromRow, rookDestCol);
+            rook->markAsMoved();
+        }
+    }
+
+    // -- EN PASSANT CAPTURE --
+    // If a Pawn moves diagonally to an empty square, it is an En Passant capture.
+    else if (piece->getType() == Pawn && 
+             board.at(toRow).at(toColumn) == nullptr && 
+             fromColumn != toColumn) {
+        
+        // The victim pawn is "behind" the destination square
         ChessPiece* victim = board.at(fromRow).at(toColumn);
-        if (victim != nullptr) {
+        if (victim) {
             delete victim;
             board.at(fromRow).at(toColumn) = nullptr;
         }
     }
 
-    // --- STANDARD CAPTURE LOGIC ---
+    // ---------------------------------------------------
+    // 3. STANDARD CAPTURE & MOVE
+    // ---------------------------------------------------
+
+    // If destination is occupied (Standard Capture), remove that piece
     if (board.at(toRow).at(toColumn) != nullptr) {
         delete board.at(toRow).at(toColumn);
         board.at(toRow).at(toColumn) = nullptr;
     }
 
-    // --- EXECUTE MOVE ---
+    // Move the actual piece
     board.at(toRow).at(toColumn) = piece;
     board.at(fromRow).at(fromColumn) = nullptr;
     piece->setPosition(toRow, toColumn);
 
-    // --- PAWN PROMOTION (Existing Code) ---
-    PawnPiece* pawn = dynamic_cast<PawnPiece*>(piece);
-    if (pawn != nullptr) {
-        bool promote = false;
-        if (piece->getColor() == White && toRow == 0) promote = true;
-        else if (piece->getColor() == Black && toRow == numRows - 1) promote = true;
+    // ---------------------------------------------------
+    // 4. UPDATE STATE (En Passant Target & HasMoved)
+    // ---------------------------------------------------
 
-        if (promote) {
-            Color c = piece->getColor();
-            delete board.at(toRow).at(toColumn);
-            board.at(toRow).at(toColumn) = nullptr;
-            createChessPiece(c, Queen, toRow, toColumn);
-            piece = board.at(toRow).at(toColumn); // Update pointer to new piece
-        }
-    }
-
-    // --- UPDATE EN PASSANT TARGET FOR NEXT TURN ---
-    // If this move was a Pawn moving 2 squares, mark the skipped square
-    if (piece->getType() == Pawn && std::abs(toRow - fromRow) == 2) {
-        // The skipped square is the average of the rows
-        int skippedRow = (fromRow + toRow) / 2;
-        enPassantTarget = {skippedRow, toColumn};
+    // Set En Passant Target if a Pawn moves 2 squares
+    if (piece->getType() == Pawn && std::abs(fromRow - toRow) == 2) {
+        enPassantTarget = {(fromRow + toRow) / 2, toColumn};
     } else {
-        // Any other move (including single pawn steps) clears the target
+        // Reset target on any other move
         enPassantTarget = {-1, -1};
     }
 
+    // Mark piece as having moved (important for Castling logic)
+    piece->markAsMoved();
+
+    // ---------------------------------------------------
+    // 5. PAWN PROMOTION
+    // ---------------------------------------------------
+    if (piece->getType() == Pawn) {
+        bool promote = (piece->getColor() == White && toRow == 0) ||
+                       (piece->getColor() == Black && toRow == numRows - 1);
+
+        if (promote) {
+            Color c = piece->getColor();
+            // Delete the Pawn
+            delete board.at(toRow).at(toColumn);
+            board.at(toRow).at(toColumn) = nullptr;
+
+            // Create the Queen
+            createChessPiece(c, Queen, toRow, toColumn);
+        }
+    }
+
+    // ---------------------------------------------------
+    // 6. FINALIZE TURN
+    // ---------------------------------------------------
     turn = (turn == White ? Black : White);
     return true;
 }

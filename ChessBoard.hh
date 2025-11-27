@@ -30,6 +30,10 @@ namespace Student
         bool isSquareUnderAttack(int row, int column, Color byColor);
         bool wouldLeaveKingInCheck(int fromRow, int fromColumn, int toRow, int toColumn);
         std::pair<int,int> findKing(Color c);
+        // In ChessBoard.hh
+
+        // Helper to validate castling rules specifically
+        bool isValidCastling(int fromRow, int fromColumn, int toRow, int toColumn);
 
     public:
         /**

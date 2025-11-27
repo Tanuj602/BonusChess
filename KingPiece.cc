@@ -15,8 +15,19 @@ bool KingPiece::canMoveToLocation(int toRow, int toColumn)
 {
     int dr = toRow - row;
     int dc = toColumn - column;
-    if (dr == 0 && dc == 0) return false;
-    return (dr >= -1 && dr <= 1) && (dc >= -1 && dc <= 1);
+    
+    // Standard move
+    if (std::abs(dr) <= 1 && std::abs(dc) <= 1) {
+        return !(dr == 0 && dc == 0);
+    }
+    
+    // Castling move (Geometry only): 
+    // King moves 2 squares horizontally, same row.
+    if (dr == 0 && std::abs(dc) == 2) {
+        return true;
+    }
+
+    return false;
 }
 
 const char *KingPiece::toString()

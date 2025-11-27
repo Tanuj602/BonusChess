@@ -15,6 +15,7 @@ namespace Student
     Type type;
     int row;
     int column;
+    bool hasMoved = false; // Initialize to false
 
   public:
     /**
@@ -97,6 +98,9 @@ namespace Student
      * A unicode representation of the piece.
      */
     virtual const char *toString() = 0;
+
+    bool getHasMoved() { return hasMoved; }
+    void markAsMoved() { hasMoved = true; }
   };
 }
 

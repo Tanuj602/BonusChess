@@ -3,8 +3,8 @@
 #include "RookPiece.hh"
 #include "BishopPiece.hh"
 #include "KingPiece.hh"
-#include "KnightPiece.hh" // Essential for Part 1/2 fixes
-#include "QueenPiece.hh"  // Essential for Part 1/2 fixes
+#include "KnightPiece.hh"
+#include "QueenPiece.hh"
 #include <sstream>
 #include <vector>
 #include <cmath>
@@ -74,7 +74,6 @@ bool ChessBoard::isPseudoValidMove(int fromRow, int fromColumn, int toRow, int t
 
     if (!piece->canMoveToLocation(toRow, toColumn)) return false;
 
-    // Path obstruction check
     Type ty = piece->getType();
     if (ty == Rook || (ty == Queen && (fromRow == toRow || fromColumn == toColumn))) {
         int dr = (toRow > fromRow) ? 1 : (toRow < fromRow ? -1 : 0);
@@ -106,7 +105,6 @@ bool ChessBoard::isSquareUnderAttack(int row, int column, Color byColor)
             ChessPiece* attacker = board.at(r).at(c);
             if (!attacker) continue;
             if (attacker->getColor() != byColor) continue;
-            // Check pseudo move directly
             if (isPseudoValidMove(r, c, row, column)) {
                 return true;
             }
@@ -133,23 +131,37 @@ bool ChessBoard::wouldLeaveKingInCheck(int fromRow, int fromColumn, int toRow, i
     Color moverColor     = mover->getColor();
     Color enemyColor     = (moverColor == White ? Black : White);
 
-    // Temporarily apply move
+    // --- EN PASSANT HANDLE START ---
+    // If this is an En Passant capture, we must remove the victim pawn
+    // to correctly check if the path is cleared.
+    bool isEnPassant = (mover->getType() == Pawn && captured == nullptr && fromColumn != toColumn);
+    ChessPiece* epVictim = nullptr;
+    if (isEnPassant) {
+        epVictim = board.at(fromRow).at(toColumn);
+        board.at(fromRow).at(toColumn) = nullptr;
+    }
+    // -------------------------------
+
     board.at(toRow).at(toColumn) = mover;
     board.at(fromRow).at(fromColumn) = nullptr;
     int oldR = mover->getRow(), oldC = mover->getColumn();
     mover->setPosition(toRow, toColumn);
 
-    // Check King status
     std::pair<int,int> kpos = (mover->getType() == King) ? std::pair<int,int>{toRow, toColumn} : findKing(moverColor);
     bool inCheck = false;
     if (kpos.first != -1) {
         inCheck = isSquareUnderAttack(kpos.first, kpos.second, enemyColor);
     }
 
-    // Revert move
     mover->setPosition(oldR, oldC);
     board.at(fromRow).at(fromColumn) = mover;
     board.at(toRow).at(toColumn) = captured;
+
+    // --- EN PASSANT HANDLE END ---
+    if (isEnPassant) {
+        board.at(fromRow).at(toColumn) = epVictim;
+    }
+    // -----------------------------
 
     return inCheck;
 }
@@ -159,7 +171,6 @@ bool ChessBoard::isValidCastling(int fromRow, int fromColumn, int toRow, int toC
     ChessPiece* king = board.at(fromRow).at(fromColumn);
     if (king->getHasMoved()) return false;
 
-    // Cannot castle out of check
     Color enemy = (king->getColor() == White ? Black : White);
     if (isSquareUnderAttack(fromRow, fromColumn, enemy)) return false;
 
@@ -170,13 +181,11 @@ bool ChessBoard::isValidCastling(int fromRow, int fromColumn, int toRow, int toC
         return false;
     }
 
-    // Path clear?
     int dir = (toColumn > fromColumn) ? 1 : -1;
     for (int c = fromColumn + dir; c != rookCol; c += dir) {
         if (board.at(fromRow).at(c) != nullptr) return false;
     }
 
-    // Path safe? (skip and dest)
     if (isSquareUnderAttack(fromRow, fromColumn + dir, enemy)) return false;
     if (isSquareUnderAttack(toRow, toColumn, enemy)) return false;
 
@@ -190,11 +199,12 @@ bool ChessBoard::isValidMove(int fromRow, int fromColumn, int toRow, int toColum
     ChessPiece* piece = board.at(fromRow).at(fromColumn);
     if (!piece) return false;
 
-    // CASTLING CHECK
+    // Castling Check (Explicit)
     if (piece->getType() == King && std::abs(toColumn - fromColumn) == 2 && fromRow == toRow) {
         return isValidCastling(fromRow, fromColumn, toRow, toColumn);
     }
 
+    // Standard Moves
     if (!isPseudoValidMove(fromRow, fromColumn, toRow, toColumn)) return false;
     if (wouldLeaveKingInCheck(fromRow, fromColumn, toRow, toColumn)) return false;
 
@@ -229,7 +239,6 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
         }
     }
 
-    // 3. STANDARD CAPTURE/MOVE
     if (board.at(toRow).at(toColumn)) {
         delete board.at(toRow).at(toColumn);
     }
@@ -237,7 +246,6 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
     board.at(fromRow).at(fromColumn) = nullptr;
     piece->setPosition(toRow, toColumn);
 
-    // 4. UPDATE STATE
     if (piece->getType() == Pawn && std::abs(toRow - fromRow) == 2) {
         enPassantTarget = {(fromRow + toRow) / 2, toColumn};
     } else {
@@ -245,7 +253,6 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
     }
     piece->markAsMoved();
 
-    // 5. PROMOTION
     if (piece->getType() == Pawn) {
         bool promote = (piece->getColor() == White && toRow == 0) || (piece->getColor() == Black && toRow == numRows - 1);
         if (promote) {
@@ -297,7 +304,6 @@ float ChessBoard::scoreBoard() {
             float val = getPieceValue(p->getType());
             int moveCount = 0;
 
-            // Count legal moves for this piece
             for (int tr = 0; tr < numRows; ++tr) {
                 for (int tc = 0; tc < numCols; ++tc) {
                     // Check standard moves
@@ -306,7 +312,9 @@ float ChessBoard::scoreBoard() {
                             moveCount++;
                         }
                     }
-                    // Check Castling moves (only for Kings)
+                    // Check Castling (only for Kings)
+                    // Since KingPiece returns false for dist=2, isPseudoValidMove won't catch this.
+                    // This prevents double counting.
                     if (p->getType() == King && std::abs(tc - c) == 2 && tr == r) {
                          if (isValidCastling(r, c, tr, tc)) {
                              moveCount++;
@@ -339,34 +347,28 @@ float ChessBoard::getHighestNextScore() {
                     if (isValidMove(r, c, tr, tc)) {
                         moveFound = true;
 
-                        // --- SIMULATION START ---
                         ChessPiece* victim = board.at(tr).at(tc);
                         ChessPiece* enPassantVictim = nullptr;
                         int epRow = r; 
                         int epCol = tc;
 
-                        // Handle En Passant Simulation
                         bool isEnPassant = (p->getType() == Pawn && victim == nullptr && c != tc);
                         if (isEnPassant) {
                             enPassantVictim = board.at(epRow).at(epCol);
-                            board.at(epRow).at(epCol) = nullptr; // Hide victim
+                            board.at(epRow).at(epCol) = nullptr;
                         }
 
-                        // Apply Move
                         board.at(tr).at(tc) = p;
                         board.at(r).at(c) = nullptr;
                         p->setPosition(tr, tc);
 
-                        // Handle Promotion Simulation
                         bool isPromotion = (p->getType() == Pawn && (tr == 0 || tr == numRows - 1));
                         ChessPiece* promotedPawn = nullptr;
                         if (isPromotion) {
-                            promotedPawn = p; // Keep ref to pawn
-                            // Replace pawn with temp Queen
+                            promotedPawn = p;
                             board.at(tr).at(tc) = new QueenPiece(*this, p->getColor(), tr, tc);
                         }
 
-                        // Handle Castling Simulation
                         bool isCastling = (p->getType() == King && std::abs(tc - c) == 2);
                         ChessPiece* castleRook = nullptr;
                         int rookStartCol = -1, rookEndCol = -1;
@@ -374,37 +376,31 @@ float ChessBoard::getHighestNextScore() {
                             rookStartCol = (tc > c) ? (numCols - 1) : 0;
                             rookEndCol = (tc > c) ? (tc - 1) : (tc + 1);
                             castleRook = board.at(r).at(rookStartCol);
-                            // Move Rook
-                            board.at(r).at(rookEndCol) = castleRook;
-                            board.at(r).at(rookStartCol) = nullptr;
-                            castleRook->setPosition(r, rookEndCol);
+                            if (castleRook) {
+                                board.at(r).at(rookEndCol) = castleRook;
+                                board.at(r).at(rookStartCol) = nullptr;
+                                castleRook->setPosition(r, rookEndCol);
+                            }
                         }
 
-                        // CALC SCORE
                         float currentScore = scoreBoard();
                         if (currentScore > maxScore) maxScore = currentScore;
 
-                        // --- UNDO MOVE ---
-                        
-                        // Undo Castling
+                        // UNDO
                         if (isCastling && castleRook) {
                             castleRook->setPosition(r, rookStartCol);
                             board.at(r).at(rookStartCol) = castleRook;
                             board.at(r).at(rookEndCol) = nullptr;
                         }
-
-                        // Undo Promotion
                         if (isPromotion) {
-                            delete board.at(tr).at(tc); // Delete temp Queen
-                            board.at(tr).at(tc) = promotedPawn; // Put pawn back
+                            delete board.at(tr).at(tc);
+                            board.at(tr).at(tc) = promotedPawn;
                         }
 
-                        // Undo Move
                         p->setPosition(r, c);
                         board.at(r).at(c) = p;
                         board.at(tr).at(tc) = victim;
 
-                        // Undo En Passant
                         if (isEnPassant && enPassantVictim) {
                              board.at(epRow).at(epCol) = enPassantVictim;
                         }

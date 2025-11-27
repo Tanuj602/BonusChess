@@ -24,6 +24,9 @@ namespace Student
          */
         std::vector<std::vector<ChessPiece *>> board;
         bool isPseudoValidMove(int fromRow, int fromColumn, int toRow, int toColumn);
+        // Stores the coordinates of the square "skipped" by a double-moving pawn.
+        // Initialized to {-1, -1}.
+        std::pair<int, int> enPassantTarget;
         bool isSquareUnderAttack(int row, int column, Color byColor);
         bool wouldLeaveKingInCheck(int fromRow, int fromColumn, int toRow, int toColumn);
         std::pair<int,int> findKing(Color c);
@@ -43,6 +46,8 @@ namespace Student
         ~ChessBoard();
         ChessBoard(const ChessBoard&) = delete;
         ChessBoard& operator=(const ChessBoard&) = delete;
+        // Getter for the en passant target
+        std::pair<int, int> getEnPassantTarget() { return enPassantTarget; }
 
         /**
          * @return

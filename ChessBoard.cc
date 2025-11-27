@@ -19,6 +19,8 @@ ChessBoard::ChessBoard(int numRow, int numCol)
     numRows = numRow;
     numCols = numCol;
     turn = White;
+    // Initialize target to invalid
+    enPassantTarget = {-1, -1}; 
     board = std::vector<std::vector<ChessPiece *>>(numRows, std::vector<ChessPiece *>(numCols, nullptr));
 }
 
@@ -118,74 +120,62 @@ bool ChessBoard::isPseudoValidMove(int fromRow, int fromColumn, int toRow, int t
 
 bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
 {
-    // ---------------------------------------------------
-    // 1. INITIAL CHECKS
-    // ---------------------------------------------------
-
-    // Check bounds
-    if (!in_bounds(fromRow, fromColumn, numRows, numCols) ||
-        !in_bounds(toRow, toColumn, numRows, numCols)) {
-        return false;
-    }
+    if (!isValidMove(fromRow, fromColumn, toRow, toColumn)) return false;
+    if (board.at(fromRow).at(fromColumn)->getColor() != turn) return false;
 
     ChessPiece* piece = board.at(fromRow).at(fromColumn);
     
-    // Check existence
-    if (!piece) return false;
+    // --- EN PASSANT CAPTURE LOGIC ---
+    // If a Pawn moves diagonally into an empty square, it MUST be En Passant
+    // (PawnPiece::canMoveToLocation only allows this if it matches enPassantTarget)
+    if (piece->getType() == Pawn && board.at(toRow).at(toColumn) == nullptr && fromColumn != toColumn) {
+        // The victim pawn is located at [fromRow][toColumn]
+        // (Directly "behind" where the capturing pawn lands, relative to the capture direction)
+        ChessPiece* victim = board.at(fromRow).at(toColumn);
+        if (victim != nullptr) {
+            delete victim;
+            board.at(fromRow).at(toColumn) = nullptr;
+        }
+    }
 
-    // Check turn
-    if (piece->getColor() != turn) return false;
-
-    // Check validity
-    if (!isValidMove(fromRow, fromColumn, toRow, toColumn)) return false;
-
-    // ---------------------------------------------------
-    // 2. EXECUTE MOVE & CAPTURE
-    // ---------------------------------------------------
-
-    // Capture if needed
-    if (ChessPiece* victim = board.at(toRow).at(toColumn)) {
-        delete victim;
+    // --- STANDARD CAPTURE LOGIC ---
+    if (board.at(toRow).at(toColumn) != nullptr) {
+        delete board.at(toRow).at(toColumn);
         board.at(toRow).at(toColumn) = nullptr;
     }
 
-    // Move the piece
+    // --- EXECUTE MOVE ---
     board.at(toRow).at(toColumn) = piece;
     board.at(fromRow).at(fromColumn) = nullptr;
     piece->setPosition(toRow, toColumn);
 
-    // ---------------------------------------------------
-    // 3. PAWN PROMOTION
-    // ---------------------------------------------------
-    
-    // Check if the moved piece is a Pawn
+    // --- PAWN PROMOTION (Existing Code) ---
     PawnPiece* pawn = dynamic_cast<PawnPiece*>(piece);
-
     if (pawn != nullptr) {
         bool promote = false;
-        // White Pawn reaches top (Row 0)
-        if (piece->getColor() == White && toRow == 0) {
-            promote = true;
-        }
-        // Black Pawn reaches bottom (Row numRows - 1)
-        else if (piece->getColor() == Black && toRow == numRows - 1) {
-            promote = true;
-        }
+        if (piece->getColor() == White && toRow == 0) promote = true;
+        else if (piece->getColor() == Black && toRow == numRows - 1) promote = true;
 
         if (promote) {
             Color c = piece->getColor();
-            // Delete the pawn from the board
             delete board.at(toRow).at(toColumn);
             board.at(toRow).at(toColumn) = nullptr;
-
-            // Create a Queen in its place
             createChessPiece(c, Queen, toRow, toColumn);
+            piece = board.at(toRow).at(toColumn); // Update pointer to new piece
         }
     }
 
-    // ---------------------------------------------------
-    // 4. FINALIZE TURN
-    // ---------------------------------------------------
+    // --- UPDATE EN PASSANT TARGET FOR NEXT TURN ---
+    // If this move was a Pawn moving 2 squares, mark the skipped square
+    if (piece->getType() == Pawn && std::abs(toRow - fromRow) == 2) {
+        // The skipped square is the average of the rows
+        int skippedRow = (fromRow + toRow) / 2;
+        enPassantTarget = {skippedRow, toColumn};
+    } else {
+        // Any other move (including single pawn steps) clears the target
+        enPassantTarget = {-1, -1};
+    }
+
     turn = (turn == White ? Black : White);
     return true;
 }

@@ -34,6 +34,7 @@ namespace Student
 
         // Helper to validate castling rules specifically
         bool isValidCastling(int fromRow, int fromColumn, int toRow, int toColumn);
+        int getPieceValue(Type t);
 
     public:
         /**
@@ -146,6 +147,16 @@ namespace Student
          * An output stream containing the full board layout.
          */
         std::ostringstream displayBoard();
+        /**
+         * @brief Computes the score of the board from the perspective of the current turn.
+         */
+        float scoreBoard();
+
+        /**
+         * @brief Simulates all valid moves for the current player and returns the highest
+         * resulting score (from the original player's perspective).
+         */
+        float getHighestNextScore();
     };
 }
 

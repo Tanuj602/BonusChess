@@ -377,3 +377,128 @@ std::ostringstream ChessBoard::displayBoard()
 
     return outputString;
 }
+
+// In ChessBoard.cc
+
+// ----------------------------------------------------------------------------
+// PART 5: SCORING IMPLEMENTATION
+// ----------------------------------------------------------------------------
+
+int ChessBoard::getPieceValue(Type t) {
+    switch (t) {
+        case King:   return 200;
+        case Queen:  return 9;
+        case Rook:   return 5;
+        case Bishop: return 3;
+        case Knight: return 3;
+        case Pawn:   return 1;
+        default:     return 0;
+    }
+}
+
+float ChessBoard::scoreBoard() {
+    float myScore = 0.0;
+    float enemyScore = 0.0;
+
+    // Identify who is "My" (current turn) and who is "Enemy"
+    Color myColor = turn;
+    Color enemyColor = (turn == White ? Black : White);
+
+    for (int r = 0; r < numRows; ++r) {
+        for (int c = 0; c < numCols; ++c) {
+            ChessPiece* p = board.at(r).at(c);
+            if (!p) continue;
+
+            // 1. Calculate Material Score
+            int val = getPieceValue(p->getType());
+
+            // 2. Calculate Mobility Score (0.1 per valid move)
+            int moveCount = 0;
+            // We must check every square on the board to see if this piece can move there
+            for (int tr = 0; tr < numRows; ++tr) {
+                for (int tc = 0; tc < numCols; ++tc) {
+                    // Use isValidMove to check legality (checks bounds, turns, checks, etc.)
+                    // Note: We use the generic check, ensuring we pass the correct 
+                    // 'from' coordinates and target coordinates.
+                    
+                    // Optimization: We must temporarily ensure the piece belongs to the 
+                    // "current turn" logic inside isValidMove, or isValidMove might fail 
+                    // if we are calculating score for the player whose turn it ISN'T.
+                    // However, isValidMove checks `piece->getColor() != turn`. 
+                    // So we can only strictly count moves for the active player using isValidMove.
+                    
+                    // Workaround: We use isPseudoValidMove + wouldLeaveKingInCheck 
+                    // manually to ignore the 'turn' check inside isValidMove.
+                    if (isPseudoValidMove(r, c, tr, tc)) {
+                        if (!wouldLeaveKingInCheck(r, c, tr, tc)) {
+                            moveCount++;
+                        }
+                    }
+                }
+            }
+
+            // Add to totals
+            if (p->getColor() == myColor) {
+                myScore += val;
+                myScore += (0.1f * moveCount);
+            } else {
+                enemyScore += val;
+                enemyScore += (0.1f * moveCount);
+            }
+        }
+    }
+
+    return myScore - enemyScore;
+}
+
+float ChessBoard::getHighestNextScore() {
+    float maxScore = -100000.0f; // Start very low
+    bool moveFound = false;
+
+    // We must iterate over all pieces belonging to the current turn
+    for (int r = 0; r < numRows; ++r) {
+        for (int c = 0; c < numCols; ++c) {
+            ChessPiece* p = board.at(r).at(c);
+            if (!p || p->getColor() != turn) continue;
+
+            // Try every possible move for this piece
+            for (int tr = 0; tr < numRows; ++tr) {
+                for (int tc = 0; tc < numCols; ++tc) {
+                    if (isValidMove(r, c, tr, tc)) {
+                        moveFound = true;
+                        
+                        // --- SIMULATE MOVE ---
+                        ChessPiece* victim = board.at(tr).at(tc);
+                        
+                        // Execute pointer swap
+                        board.at(tr).at(tc) = p;
+                        board.at(r).at(c) = nullptr;
+                        p->setPosition(tr, tc);
+                        
+                        // Note: We do NOT change 'turn'. 
+                        // The requirements say "from the perspective of the current player".
+                        // If we call scoreBoard() now, it will calculate score for 'turn'.
+                        // Since we haven't changed 'turn', it calculates the score for
+                        // the player who just made the move, which is exactly what we want.
+                        
+                        float currentScore = scoreBoard();
+                        if (currentScore > maxScore) {
+                            maxScore = currentScore;
+                        }
+
+                        // --- UNDO MOVE ---
+                        p->setPosition(r, c);
+                        board.at(r).at(c) = p;
+                        board.at(tr).at(tc) = victim; // Restore victim (can be nullptr)
+                    }
+                }
+            }
+        }
+    }
+
+    // If no moves are possible (Checkmate or Stalemate), score usually handled elsewhere,
+    // but for this assignment, we just return the default low value or current score.
+    if (!moveFound) return scoreBoard(); 
+
+    return maxScore;
+}

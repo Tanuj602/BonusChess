@@ -106,16 +106,17 @@ bool ChessBoard::isSquareUnderAttack(int row, int column, Color byColor)
             if (!attacker) continue;
             if (attacker->getColor() != byColor) continue;
 
-            // --- FIX FOR PAWN THREATS ---
-            // Pawns threaten diagonal squares ALWAYS, even if they are empty.
+            // --- CRITICAL FIX: MANUALLY CHECK PAWN THREATS ---
+            // Pawns attack diagonals even if the square is empty.
+            // isPseudoValidMove returns false for empty diagonals, so we fail to see the threat.
             if (attacker->getType() == Pawn) {
                 int dir = (byColor == Black) ? 1 : -1;
-                // Check the two diagonal squares the pawn attacks
+                // Check if the pawn at (r,c) attacks (row, column)
                 if (r + dir == row && (c - 1 == column || c + 1 == column)) {
                     return true;
                 }
             } 
-            // --- STANDARD LOGIC FOR OTHER PIECES ---
+            // --- STANDARD CHECK FOR OTHER PIECES ---
             else {
                 if (isPseudoValidMove(r, c, row, column)) {
                     return true;
@@ -182,7 +183,6 @@ bool ChessBoard::isValidCastling(int fromRow, int fromColumn, int toRow, int toC
     Color enemy = (king->getColor() == White ? Black : White);
     if (isSquareUnderAttack(fromRow, fromColumn, enemy)) return false;
 
-    // Logic for finding Rook (works for 6x6 or 8x8)
     int rookCol = (toColumn > fromColumn) ? (numCols - 1) : 0;
     ChessPiece* rook = board.at(fromRow).at(rookCol);
 
@@ -287,7 +287,10 @@ bool ChessBoard::isPieceUnderThreat(int row, int column) {
     return isSquareUnderAttack(row, column, enemy);
 }
 
+// ----------------------------------------------------------------------------
 // SCORING
+// ----------------------------------------------------------------------------
+
 int ChessBoard::getPieceValue(Type t) {
     switch (t) {
         case King:   return 200;
@@ -315,6 +318,8 @@ float ChessBoard::scoreBoard() {
 
             for (int tr = 0; tr < numRows; ++tr) {
                 for (int tc = 0; tc < numCols; ++tc) {
+                    // Check standard moves
+                    // Note: King castling will return false in pseudo-valid now, avoiding double count.
                     if (isPseudoValidMove(r, c, tr, tc)) {
                         if (!wouldLeaveKingInCheck(r, c, tr, tc)) {
                             moveCount++;
@@ -352,6 +357,7 @@ float ChessBoard::getHighestNextScore() {
                     if (isValidMove(r, c, tr, tc)) {
                         moveFound = true;
 
+                        // SIMULATION
                         ChessPiece* victim = board.at(tr).at(tc);
                         ChessPiece* enPassantVictim = nullptr;
                         int epRow = r; 
@@ -388,6 +394,7 @@ float ChessBoard::getHighestNextScore() {
                             }
                         }
 
+                        // SCORE
                         float currentScore = scoreBoard();
                         if (currentScore > maxScore) maxScore = currentScore;
 

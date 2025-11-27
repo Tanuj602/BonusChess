@@ -1,6 +1,6 @@
 #include "KingPiece.hh"
 #include "ChessBoard.hh"
-#include <cmath>
+#include <cmath> // Needed for std::abs
 
 using Student::KingPiece;
 using Student::ChessBoard;
@@ -23,7 +23,7 @@ bool KingPiece::canMoveToLocation(int toRow, int toColumn)
     }
 
     // IMPORTANT: Return false for castling (2 steps) here.
-    // The Board logic will handle the special case.
+    // The ChessBoard logic will handle the special scoring/validation for castling.
     return false;
 }
 

@@ -3,6 +3,8 @@
 #include "RookPiece.hh"
 #include "BishopPiece.hh"
 #include "KingPiece.hh"
+#include "KnightPiece.hh"
+#include "QueenPiece.hh"
 #include <sstream>
 
 using Student::ChessBoard;
@@ -31,6 +33,8 @@ ChessBoard::~ChessBoard() {
     }
 }
 
+// In ChessBoard.cc
+
 void ChessBoard::createChessPiece(Color col, Type ty, int startRow, int startColumn)
 {
     // clean up existing piece if any
@@ -44,6 +48,10 @@ void ChessBoard::createChessPiece(Color col, Type ty, int startRow, int startCol
     else if (ty == Rook)   p = new RookPiece(*this, col, startRow, startColumn);
     else if (ty == Bishop) p = new BishopPiece(*this, col, startRow, startColumn);
     else if (ty == King)   p = new KingPiece(*this, col, startRow, startColumn);
+    // --- ADD THESE TWO LINES ---
+    else if (ty == Knight) p = new KnightPiece(*this, col, startRow, startColumn);
+    else if (ty == Queen)  p = new QueenPiece(*this, col, startRow, startColumn);
+    // ---------------------------
     
     board.at(startRow).at(startColumn) = p;
 }

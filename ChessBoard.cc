@@ -105,8 +105,21 @@ bool ChessBoard::isSquareUnderAttack(int row, int column, Color byColor)
             ChessPiece* attacker = board.at(r).at(c);
             if (!attacker) continue;
             if (attacker->getColor() != byColor) continue;
-            if (isPseudoValidMove(r, c, row, column)) {
-                return true;
+
+            // --- FIX FOR PAWN THREATS ---
+            // Pawns threaten diagonal squares ALWAYS, even if they are empty.
+            if (attacker->getType() == Pawn) {
+                int dir = (byColor == Black) ? 1 : -1;
+                // Check the two diagonal squares the pawn attacks
+                if (r + dir == row && (c - 1 == column || c + 1 == column)) {
+                    return true;
+                }
+            } 
+            // --- STANDARD LOGIC FOR OTHER PIECES ---
+            else {
+                if (isPseudoValidMove(r, c, row, column)) {
+                    return true;
+                }
             }
         }
     }
@@ -131,16 +144,13 @@ bool ChessBoard::wouldLeaveKingInCheck(int fromRow, int fromColumn, int toRow, i
     Color moverColor     = mover->getColor();
     Color enemyColor     = (moverColor == White ? Black : White);
 
-    // --- EN PASSANT HANDLE START ---
-    // If this is an En Passant capture, we must remove the victim pawn
-    // to correctly check if the path is cleared.
+    // En Passant Handle
     bool isEnPassant = (mover->getType() == Pawn && captured == nullptr && fromColumn != toColumn);
     ChessPiece* epVictim = nullptr;
     if (isEnPassant) {
         epVictim = board.at(fromRow).at(toColumn);
         board.at(fromRow).at(toColumn) = nullptr;
     }
-    // -------------------------------
 
     board.at(toRow).at(toColumn) = mover;
     board.at(fromRow).at(fromColumn) = nullptr;
@@ -157,11 +167,9 @@ bool ChessBoard::wouldLeaveKingInCheck(int fromRow, int fromColumn, int toRow, i
     board.at(fromRow).at(fromColumn) = mover;
     board.at(toRow).at(toColumn) = captured;
 
-    // --- EN PASSANT HANDLE END ---
     if (isEnPassant) {
         board.at(fromRow).at(toColumn) = epVictim;
     }
-    // -----------------------------
 
     return inCheck;
 }
@@ -174,6 +182,7 @@ bool ChessBoard::isValidCastling(int fromRow, int fromColumn, int toRow, int toC
     Color enemy = (king->getColor() == White ? Black : White);
     if (isSquareUnderAttack(fromRow, fromColumn, enemy)) return false;
 
+    // Logic for finding Rook (works for 6x6 or 8x8)
     int rookCol = (toColumn > fromColumn) ? (numCols - 1) : 0;
     ChessPiece* rook = board.at(fromRow).at(rookCol);
 
@@ -182,10 +191,12 @@ bool ChessBoard::isValidCastling(int fromRow, int fromColumn, int toRow, int toC
     }
 
     int dir = (toColumn > fromColumn) ? 1 : -1;
+    // Check path obstruction
     for (int c = fromColumn + dir; c != rookCol; c += dir) {
         if (board.at(fromRow).at(c) != nullptr) return false;
     }
 
+    // Check path safety (skip square and dest square)
     if (isSquareUnderAttack(fromRow, fromColumn + dir, enemy)) return false;
     if (isSquareUnderAttack(toRow, toColumn, enemy)) return false;
 
@@ -199,12 +210,10 @@ bool ChessBoard::isValidMove(int fromRow, int fromColumn, int toRow, int toColum
     ChessPiece* piece = board.at(fromRow).at(fromColumn);
     if (!piece) return false;
 
-    // Castling Check (Explicit)
     if (piece->getType() == King && std::abs(toColumn - fromColumn) == 2 && fromRow == toRow) {
         return isValidCastling(fromRow, fromColumn, toRow, toColumn);
     }
 
-    // Standard Moves
     if (!isPseudoValidMove(fromRow, fromColumn, toRow, toColumn)) return false;
     if (wouldLeaveKingInCheck(fromRow, fromColumn, toRow, toColumn)) return false;
 
@@ -218,7 +227,7 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
 
     ChessPiece* piece = board.at(fromRow).at(fromColumn);
 
-    // 1. CASTLING
+    // Castling
     if (piece->getType() == King && std::abs(toColumn - fromColumn) == 2) {
         int rookCol = (toColumn > fromColumn) ? (numCols - 1) : 0;
         int rookDest = (toColumn > fromColumn) ? (toColumn - 1) : (toColumn + 1);
@@ -230,7 +239,7 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
             rook->markAsMoved();
         }
     }
-    // 2. EN PASSANT
+    // En Passant
     else if (piece->getType() == Pawn && fromColumn != toColumn && board.at(toRow).at(toColumn) == nullptr) {
         ChessPiece* victim = board.at(fromRow).at(toColumn);
         if (victim) {
@@ -239,6 +248,7 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
         }
     }
 
+    // Capture/Move
     if (board.at(toRow).at(toColumn)) {
         delete board.at(toRow).at(toColumn);
     }
@@ -246,6 +256,7 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
     board.at(fromRow).at(fromColumn) = nullptr;
     piece->setPosition(toRow, toColumn);
 
+    // State Update
     if (piece->getType() == Pawn && std::abs(toRow - fromRow) == 2) {
         enPassantTarget = {(fromRow + toRow) / 2, toColumn};
     } else {
@@ -253,6 +264,7 @@ bool ChessBoard::movePiece(int fromRow, int fromColumn, int toRow, int toColumn)
     }
     piece->markAsMoved();
 
+    // Promotion
     if (piece->getType() == Pawn) {
         bool promote = (piece->getColor() == White && toRow == 0) || (piece->getColor() == Black && toRow == numRows - 1);
         if (promote) {
@@ -275,10 +287,7 @@ bool ChessBoard::isPieceUnderThreat(int row, int column) {
     return isSquareUnderAttack(row, column, enemy);
 }
 
-// ----------------------------------------------------------------------------
 // SCORING
-// ----------------------------------------------------------------------------
-
 int ChessBoard::getPieceValue(Type t) {
     switch (t) {
         case King:   return 200;
@@ -306,15 +315,12 @@ float ChessBoard::scoreBoard() {
 
             for (int tr = 0; tr < numRows; ++tr) {
                 for (int tc = 0; tc < numCols; ++tc) {
-                    // Check standard moves
                     if (isPseudoValidMove(r, c, tr, tc)) {
                         if (!wouldLeaveKingInCheck(r, c, tr, tc)) {
                             moveCount++;
                         }
                     }
-                    // Check Castling (only for Kings)
-                    // Since KingPiece returns false for dist=2, isPseudoValidMove won't catch this.
-                    // This prevents double counting.
+                    // Explicit Castling check
                     if (p->getType() == King && std::abs(tc - c) == 2 && tr == r) {
                          if (isValidCastling(r, c, tr, tc)) {
                              moveCount++;
@@ -336,7 +342,6 @@ float ChessBoard::getHighestNextScore() {
     float maxScore = -100000.0f;
     bool moveFound = false;
 
-    // Iterate current player's pieces
     for (int r = 0; r < numRows; ++r) {
         for (int c = 0; c < numCols; ++c) {
             ChessPiece* p = board.at(r).at(c);

@@ -1,5 +1,6 @@
 #include "KingPiece.hh"
 #include "ChessBoard.hh"
+#include <cmath>
 
 using Student::KingPiece;
 using Student::ChessBoard;

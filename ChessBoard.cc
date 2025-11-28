@@ -304,43 +304,42 @@ int ChessBoard::getPieceValue(Type t) {
 }
 
 float ChessBoard::scoreBoard() {
-    float myScore = 0.0;
-    float enemyScore = 0.0;
-    Color myColor = turn;
+    float whiteScore = 0.0f, blackScore = 0.0f;
+    float whiteMoves = 0.0f, blackMoves = 0.0f;
 
     for (int r = 0; r < numRows; ++r) {
         for (int c = 0; c < numCols; ++c) {
-            ChessPiece* p = board.at(r).at(c);
+            ChessPiece* p = board[r][c];
             if (!p) continue;
 
-            float val = getPieceValue(p->getType());
-            int moveCount = 0;
+            float pieceVal = getPieceValue(p->getType());
 
+            // Add piece value to respective player
+            if (p->getColor() == White) whiteScore += pieceVal;
+            else blackScore += pieceVal;
+
+            // Count legal moves for the piece (FULLY LEGAL)
+            int moveCount = 0;
             for (int tr = 0; tr < numRows; ++tr) {
                 for (int tc = 0; tc < numCols; ++tc) {
-                    // Check standard moves
-                    // Note: King castling will return false in pseudo-valid now, avoiding double count.
-                    if (isPseudoValidMove(r, c, tr, tc)) {
-                        if (!wouldLeaveKingInCheck(r, c, tr, tc)) {
-                            moveCount++;
-                        }
+                    // Only fully legal moves for each piece
+                    if (isValidMove(r, c, tr, tc) && !wouldLeaveKingInCheck(r, c, tr, tc)) {
+                        moveCount++;
                     }
-                    // Explicit Castling check
-                    if (p->getType() == King && std::abs(tc - c) == 2 && tr == r) {
-                         if (isValidCastling(r, c, tr, tc)) {
-                             moveCount++;
-                         }
-                    }
+                    // Castling for king, if implemented (ensure isValidMove covers this!)
                 }
             }
-            
-            val += (0.1f * moveCount);
-
-            if (p->getColor() == myColor) myScore += val;
-            else enemyScore += val;
+            if (p->getColor() == White) whiteMoves += moveCount;
+            else blackMoves += moveCount;
         }
     }
-    return myScore - enemyScore;
+
+    // Total points: material + 0.1 per legal move
+    float totalWhite = whiteScore + 0.1f * whiteMoves;
+    float totalBlack = blackScore + 0.1f * blackMoves;
+
+    // Score from perspective of current turn
+    return (turn == White) ? (totalWhite - totalBlack) : (totalBlack - totalWhite);
 }
 
 float ChessBoard::getHighestNextScore() {
